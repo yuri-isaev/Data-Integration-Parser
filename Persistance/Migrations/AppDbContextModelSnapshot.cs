@@ -34,23 +34,18 @@ namespace CardsDataIntegration.Persistance.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("City")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FirstName")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("GenderId")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("LastName")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("PhoneMobile")
@@ -61,11 +56,10 @@ namespace CardsDataIntegration.Persistance.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("SurName")
-                        .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal?>("Turnover")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<int?>("Turnover")
+                        .HasColumnType("int");
 
                     b.HasKey("CardCode");
 

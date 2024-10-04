@@ -1,22 +1,22 @@
-using System.Globalization;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using CardsDataIntegration.Domains;
 using CardsDataIntegration.Persistance;
+using CardsDataIntegration.Validators;
 using ClosedXML.Excel;
 
 namespace CardsDataIntegration;
 
 public partial class MainForm : Form
 {
+  private BindingList<Client> clientsBindingList;
+  private string _oldCardCode; // Поле для хранения старого CardCode
+
   public MainForm()
   {
     InitializeComponent();
     LoadClients();
-
-    // Set form properties
-    // FormBorderStyle = FormBorderStyle.Sizable; // Allow resizing
-    // WindowState     = FormWindowState.Normal; // Start as a normal window
-    // StartPosition   = FormStartPosition.CenterScreen; // Center on screen
   }
 
   private void LoadClients()
@@ -25,27 +25,14 @@ public partial class MainForm : Form
     {
       using (var context = new AppDbContext())
       {
-        //dataGridView.DataSource = context.Clients.ToList();
-        dataGridView.DataSource = context.Clients.OrderByDescending(c => c.LastName).ToList();
-
+        var clients = context.Clients.OrderBy(c => c.LastName).ToList();
+        clientsBindingList = new BindingList<Client>(clients);
+        dataGridView.DataSource = clientsBindingList;
       }
     }
     catch (Exception ex)
     {
       MessageBox.Show($"Ошибка при загрузке клиентов: {ex.Message}");
-    }
-  }
-
-  private void btnImport_Click(object sender, EventArgs e)
-  {
-    using (OpenFileDialog openFileDialog = new OpenFileDialog())
-    {
-      openFileDialog.Filter = "Excel Files|*.xlsx";
-      if (openFileDialog.ShowDialog() == DialogResult.OK)
-      {
-        ImportFromExcel(openFileDialog.FileName);
-        LoadClients();
-      }
     }
   }
 
@@ -55,11 +42,9 @@ public partial class MainForm : Form
     SaveClientsToDatabase(clients);
   }
 
-
   private List<Client> ReadClientsFromExcel(string filePath)
   {
     var clients = new List<Client>();
-
     bool fileOpened = false;
     int attempts = 0;
 
@@ -70,6 +55,7 @@ public partial class MainForm : Form
         using (var workbook = new XLWorkbook(filePath))
         {
           var worksheet = workbook.Worksheet(1);
+
           foreach (var row in worksheet.RowsUsed().Skip(1))
           {
             if (TryCreateClientFromRow(row, out Client client))
@@ -93,17 +79,12 @@ public partial class MainForm : Form
       MessageBox.Show("Не удалось открыть файл Excel после нескольких попыток.");
     }
 
-    // Обращаем список клиентов перед возвратом
-    //clients.Reverse();
-
     return clients;
   }
 
-
   private bool TryCreateClientFromRow(IXLRow row, out Client client)
-{
-    client = null;
-
+  {
+    client = null!;
     // Считываем данные из Excel
     var cardCode = row.Cell(1).GetFormattedString().Trim();
     var lastName = row.Cell(2).GetString().Trim();
@@ -119,101 +100,51 @@ public partial class MainForm : Form
     var turnoverString = row.Cell(12).GetString().Trim();
 
     // Проверяем обязательные поля
-    if (string.IsNullOrWhiteSpace(cardCode) || string.IsNullOrWhiteSpace(lastName) || string.IsNullOrWhiteSpace(firstName))
-    {
-        return false; // Обязательные поля не заполнены
-    }
+    if (!FieldsValidator.IsValid(cardCode, phoneMobile, lastName) || !PhoneValidator.IsValid(ref phoneMobile, lastName))
+      return false;
+    if (!FieldsValidator.IsDateValid(birthdayString, out DateTime birthday, lastName)) return false;
+    if (!FieldsValidator.IsPincodeValid(pincodeString, lastName, out int? localPincode)) return false;
+    if (!FieldsValidator.IsBonusValid(bonusString, lastName, out int? bonus)) return false;
+    if (!FieldsValidator.IsTurnoverValid(turnoverString, lastName, out int? turnover)) return false;
 
-    // Проверка телефона
-    if (!Regex.IsMatch(phoneMobile, @"^\+\d{11}$"))
-    {
-        MessageBox.Show($"Некорректный формат телефона для клиента {lastName}: {phoneMobile}");
-        return false;
-    }
-
-    // Парсинг даты
-    if (!DateTime.TryParseExact(
-          birthdayString,
-          new[] { "d.M.yyyy", "M.d.yyyy", "yyyy-MM-dd", "dd.MM.yyyy", "d/MM/yyyy", "MM/dd/yyyy", "yyyy/MM/dd" },
-          CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime birthday)
-        )
-    {
-        MessageBox.Show($"Ошибка при парсинге даты для клиента {lastName}: {birthdayString}");
-        return false;
-    }
-
-    // Установка пин-кода в null, если поле пустое
-    int? pincode = null; // Пин-код будет nullable
-    if (!string.IsNullOrWhiteSpace(pincodeString))
-    {
-        // Удаляем все нецифровые символы
-        pincodeString = Regex.Replace(pincodeString, @"\D", "");
-        
-        // Парсинг пин-кода
-        if (!int.TryParse(pincodeString, out int parsedPincode))
-        {
-            MessageBox.Show($"Некорректный формат пин-кода для клиента {lastName}: {pincodeString}");
-            return false;
-        }
-        pincode = parsedPincode; // Присваиваем pincode значение
-    }
-
-    // Парсинг бонуса
-    int bonus = string.IsNullOrWhiteSpace(bonusString) ? 0 : int.TryParse(bonusString, out bonus) ? bonus : 0;
-
-    // Установка оборота в null, если поле пустое
-    decimal? turnover = null; // Оборот будет nullable
-    if (!string.IsNullOrWhiteSpace(turnoverString))
-    {
-        // Парсинг оборота
-        if (!decimal.TryParse(turnoverString, out decimal parsedTurnover))
-        {
-            MessageBox.Show($"Некорректный формат оборота для клиента {lastName}: {turnoverString}");
-            return false;
-        }
-        turnover = parsedTurnover; // Присваиваем turnover значение
-    }
-
-    // Установка значения пола по умолчанию
     genderId = string.IsNullOrWhiteSpace(genderId) ? "" : genderId;
 
     client = new Client
     {
-      CardCode    = cardCode, 
-      LastName    = lastName,
-      FirstName   = firstName,
-      SurName     = surName,
+      CardCode = cardCode,
+      LastName = lastName,
+      FirstName = firstName,
+      SurName = surName,
       PhoneMobile = phoneMobile,
-      Email       = email,
-      GenderId    = genderId,
-      Birthday    = birthday,
-      City        = city,
-      Pincode     = pincode, // || null
-      Bonus       = bonus,
-      Turnover    = turnover // || null
+      Email = email,
+      GenderId = genderId,
+      Birthday = birthday,
+      City = city,
+      Pincode = localPincode,
+      Bonus = bonus,
+      Turnover = turnover
     };
 
     return true;
   }
 
-
   private void SaveClientsToDatabase(List<Client> clients)
   {
     using (var context = new AppDbContext())
     {
-      // Сортировка клиентов перед вставкой
-      var orderedClients = clients.OrderBy(c => c.LastName).ToList();
-
-      foreach (var client in orderedClients)
+      foreach (var client in clients)
       {
         var existingClient = context.Clients.Find(client.CardCode);
-            
+
         if (existingClient != null)
         {
-          UpdateClient(existingClient, client);
+          // Обновляем существующего клиента
+          bool updateCardCode = existingClient.CardCode != client.CardCode; // Проверка на изменение CardCode
+          UpdateClient(existingClient, client, updateCardCode);
         }
         else
         {
+          // Если клиента не найдено, добавляем нового
           context.Clients.Add(client);
         }
       }
@@ -221,56 +152,129 @@ public partial class MainForm : Form
       context.SaveChanges(); // Сохраняем все изменения за один раз
     }
   }
-  
 
-  private void UpdateClient(Client existingClient, Client newClient)
+
+  private void dataGridView_CellBeginEdit(object sender, DataGridViewCellCancelEventArgs e)
   {
-    existingClient.LastName    = newClient.LastName;
-    existingClient.FirstName   = newClient.FirstName;
-    existingClient.SurName     = newClient.SurName;
-    existingClient.PhoneMobile = newClient.PhoneMobile;
-    existingClient.GenderId    = newClient.GenderId;
-    existingClient.Birthday    = newClient.Birthday;
-    existingClient.Pincode     = newClient.Pincode;
+    // Сохраняем старый CardCode при начале редактирования
+    if (e.ColumnIndex == 0 && e.RowIndex >= 0) // Если редактируется CardCode
+    {
+      var client = clientsBindingList[e.RowIndex];
+      _oldCardCode = client.CardCode; // Сохраняем старое значение
+    }
   }
 
   private void dataGridView_CellValueChanged(object sender, DataGridViewCellEventArgs e)
   {
-    using (var context = new AppDbContext())
+    if (e.RowIndex < 0) return; // Игнорируем заголовки
+
+    dataGridView.CommitEdit(DataGridViewDataErrorContexts.Commit);
+
+    var client = clientsBindingList[e.RowIndex];
+
+    if (e.ColumnIndex == 0) // Проверяем, что изменена ячейка CardCode
     {
-      var cardCode = dataGridView.Rows[e.RowIndex].Cells[0].Value.ToString().Trim();
-      var client = context.Clients.Find(cardCode);
-      if (client != null)
+      var newCardCode = dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value.ToString();
+
+      // Проверяем, что новое значение CardCode состоит только из цифр
+      if (!Regex.IsMatch(newCardCode, @"^\d+$"))
       {
-        client.LastName    = dataGridView.Rows[e.RowIndex].Cells[1].Value.ToString().Trim();
-        client.FirstName   = dataGridView.Rows[e.RowIndex].Cells[2].Value.ToString().Trim();
-        client.SurName     = dataGridView.Rows[e.RowIndex].Cells[3].Value.ToString().Trim();
-        client.PhoneMobile = dataGridView.Rows[e.RowIndex].Cells[4].Value.ToString().Trim();
-        client.GenderId    = dataGridView.Rows[e.RowIndex].Cells[5].Value.ToString().Trim();
+        MessageBox.Show("Поле CardCode должно состоять только из цифр.");
+        dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = client.CardCode; // Восстанавливаем старое значение
+        return;
+      }
 
-        var birthdayString = dataGridView.Rows[e.RowIndex].Cells[6].Value.ToString().Trim();
-        client.Birthday = string.IsNullOrWhiteSpace(birthdayString) ? DateTime.MinValue : ParseDate(birthdayString);
+      // Сохраняем старый CardCode для использования в дальнейшем
+      string oldCardCode = _oldCardCode;
 
-        if (int.TryParse(dataGridView.Rows[e.RowIndex].Cells[7].Value.ToString().Trim(), out var pincode))
+      using (var context = new AppDbContext())
+      {
+        // Сначала проверяем, существует ли клиент с новым CardCode
+        var existingClientWithNewCode = context.Clients.Find(newCardCode);
+        if (existingClientWithNewCode != null)
         {
-          client.Pincode = pincode;
+          MessageBox.Show("Клиент с таким CardCode уже существует.");
+          // Восстанавливаем старое значение
+          client.CardCode = oldCardCode;
+          dataGridView.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = oldCardCode;
+          return;
         }
 
-        context.SaveChanges();
+        // Теперь находим клиента по старому CardCode
+        var existingClient = context.Clients.Find(oldCardCode);
+        if (existingClient != null)
+        {
+          try
+          {
+            // Создаем новый объект с изменённым CardCode
+            var updatedClient = new Client
+            {
+              CardCode = newCardCode, // Новое значение CardCode
+              LastName = existingClient.LastName,
+              FirstName = existingClient.FirstName,
+              SurName = existingClient.SurName,
+              PhoneMobile = existingClient.PhoneMobile,
+              Email = existingClient.Email,
+              GenderId = existingClient.GenderId,
+              Birthday = existingClient.Birthday,
+              City = existingClient.City,
+              Pincode = existingClient.Pincode,
+              Bonus = existingClient.Bonus,
+              Turnover = existingClient.Turnover
+            };
+
+            // Удаляем старый объект
+            context.Clients.Remove(existingClient);
+            // Добавляем новый объект
+            context.Clients.Add(updatedClient);
+            // Сохраняем изменения
+            context.SaveChanges();
+
+            // Обновляем объект в BindingList
+            clientsBindingList[e.RowIndex] = updatedClient; // Убедитесь, что BindingList обновлен
+          }
+          catch (Exception ex)
+          {
+            MessageBox.Show($"Ошибка при обновлении клиента: {ex.Message}\nStackTrace: {ex.StackTrace}");
+          }
+        }
+      }
+    }
+    else
+    {
+      // Обработка изменений других полей
+      using (var context = new AppDbContext())
+      {
+        var existingClient = context.Clients.Find(client.CardCode);
+        if (existingClient != null)
+        {
+          try
+          {
+            UpdateClient(existingClient, client, false); // false, так как CardCode не изменяется
+            context.SaveChanges();
+          }
+          catch (Exception ex)
+          {
+            MessageBox.Show($"Ошибка при обновлении клиента: {ex.Message}\nStackTrace: {ex.StackTrace}");
+          }
+        }
       }
     }
   }
 
-  private DateTime ParseDate(string dateString)
+  private void UpdateClient(Client existingClient, Client newClient, bool updateCardCode)
   {
-    DateTime date;
-    string[] formats = {"d.M.yyyy", "M.d.yyyy", "yyyy-MM-dd", "dd.MM.yyyy", "d/MM/yyyy", "MM/dd/yyyy", "yyyy/MM/dd"};
-
-    if (!DateTime.TryParseExact(dateString, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out date))
-    {
-      throw new FormatException($"Неверный формат даты: {dateString}");
-    }
-
-    return date;
+    if (updateCardCode) existingClient.CardCode = newClient.CardCode; // Обновляем CardCode
+    existingClient.LastName = newClient.LastName;
+    existingClient.FirstName = newClient.FirstName;
+    existingClient.SurName = newClient.SurName;
+    existingClient.PhoneMobile = newClient.PhoneMobile;
+    existingClient.Email = newClient.Email;
+    existingClient.GenderId = newClient.GenderId;
+    existingClient.Birthday = newClient.Birthday;
+    existingClient.City = newClient.City;
+    existingClient.Pincode = newClient.Pincode;
+    existingClient.Bonus = newClient.Bonus;
+    existingClient.Turnover = newClient.Turnover;
   }
 }

@@ -16,17 +16,17 @@ namespace CardsDataIntegration.Persistance.Migrations
                 columns: table => new
                 {
                     CardCode = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    SurName = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SurName = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     PhoneMobile = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    GenderId = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    GenderId = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Birthday = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    City = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    City = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Pincode = table.Column<int>(type: "int", nullable: true),
                     Bonus = table.Column<int>(type: "int", nullable: true),
-                    Turnover = table.Column<decimal>(type: "decimal(18,2)", nullable: true)
+                    Turnover = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
