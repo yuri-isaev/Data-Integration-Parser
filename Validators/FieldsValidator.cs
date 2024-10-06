@@ -16,6 +16,24 @@ public class FieldsValidator
     return true;
   }
 
+  public static bool IsValidCardCode(string cardCode, out string errorMessage)
+  {
+    if (string.IsNullOrWhiteSpace(cardCode))
+    {
+      errorMessage = "Поле CardCode не должно быть пустым.";
+      return false;
+    }
+
+    if (!Regex.IsMatch(cardCode, @"^\d+$"))
+    {
+      errorMessage = "Поле CardCode должно состоять только из цифр.";
+      return false;
+    }
+
+    errorMessage = null;
+    return true;
+  }
+
   public static bool IsDateValid(string birthdayString, out DateTime birthday, string lastName)
   {
     if (!DateTime.TryParseExact(
