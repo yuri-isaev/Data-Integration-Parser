@@ -1,3 +1,7 @@
+using ClientDataParser.Contracts;
+using ClientDataParser.Persistance;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace ClientDataParser;
 
 static class Program
@@ -11,7 +15,24 @@ static class Program
     // Включаем визуальные стили
     Application.EnableVisualStyles();
     Application.SetCompatibleTextRenderingDefault(false);
-    // Запускаем основную форму приложения
-    Application.Run(new MainForm());
+
+    // Настройка DI
+    var serviceProvider = new ServiceCollection()
+      .AddScoped<AppDbContext>() // Register Context Db
+      .AddScoped<IClientRepository, ClientRepository>() // Register repository
+      .AddScoped<MainForm>() // Register MainForm with DI
+      .BuildServiceProvider();
+
+    // Получение экземпляра MainForm с инъекцией зависимостей
+    var mainForm = serviceProvider.GetService<MainForm>();
+    
+    // Check if mainForm is null
+    if (mainForm == null)
+    {
+      MessageBox.Show("Failed to resolve MainForm.");
+      return;
+    }
+
+    Application.Run(mainForm);
   }
 }

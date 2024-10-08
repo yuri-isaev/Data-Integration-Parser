@@ -2,7 +2,7 @@ using ClientDataParser.Domains;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
-namespace ClientDataParser;
+namespace ClientDataParser.Persistance;
 
 public class AppDbContext : DbContext
 {

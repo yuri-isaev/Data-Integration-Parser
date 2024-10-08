@@ -12,21 +12,6 @@ public class ClientRepository : IClientRepository
     _context = context;
   }
 
-  public List<Client> GetAllClients()
-  {
-    return _context.Clients.ToList();
-  }
-
-  public Client FindClientByCardCode(AppDbContext context, string cardCode)
-  {
-    return context.Clients.Find(cardCode);
-  }
-
-  public void AddClient(AppDbContext context, Client client)
-  {
-    context.Clients.Add(client);
-  }
-
   public void RemoveClient(AppDbContext context, Client client)
   {
     context.Clients.Remove(client);
@@ -35,11 +20,6 @@ public class ClientRepository : IClientRepository
   public Client GetClientByCardCode(AppDbContext context, string cardCode)
   {
     return context.Clients.Find(cardCode);
-  }
-
-  public bool ClientExists(string cardCode)
-  {
-    return _context.Clients.Any(c => c.CardCode == cardCode);
   }
 
   public void AddNewClient(AppDbContext context, Client client)
@@ -83,18 +63,9 @@ public class ClientRepository : IClientRepository
     }
   }
 
-  public void UpdateClientFields(Client client)
-  {
-    var existingClient = GetClientByCardCode(_context, client.CardCode);
-    if (existingClient != null)
-    {
-      UpdateClient(_context, client);
-    }
-  }
-
   public List<Client> GetAllClientsOrderedByLastName()
   {
-    return _context.Clients.OrderBy(c => c.LastName).ToList();
+    return _context.Clients.OrderBy(c => c.LastName).ToList() ?? new List<Client>();
   }
 
   public void SaveChanges(AppDbContext context)

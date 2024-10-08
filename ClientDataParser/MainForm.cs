@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using ClientDataParser.Contracts;
 using ClientDataParser.Domains;
 using ClientDataParser.Persistance;
 using ClientDataParser.Validators;
@@ -8,23 +9,23 @@ namespace ClientDataParser;
 
 public partial class MainForm : Form
 {
-  private BindingList<Client> _clientsBindingList;
+  public BindingList<Client> _clientsBindingList;
   private string _oldCardCode;
-  private ClientRepository _clientRepository;
+  private IClientRepository _clientRepository;
 
-  public MainForm()
+  public MainForm(IClientRepository clientRepository)
   {
     InitializeComponent();
-    _clientRepository = new ClientRepository(new AppDbContext());
+    _clientRepository = clientRepository;
     LoadClients();
   }
 
-  private void LoadClients()
+  public void LoadClients()
   {
     try
     {
-      var clients = _clientRepository.GetAllClientsOrderedByLastName();
-      _clientsBindingList = new BindingList<Client>(clients);
+      var clients = _clientRepository.GetAllClientsOrderedByLastName() ?? new List<Client>(); // Default to an empty list if null
+      _clientsBindingList = new BindingList<Client>(clients.ToList());
       dataGridView.DataSource = _clientsBindingList;
     }
     catch (Exception ex)
@@ -33,7 +34,8 @@ public partial class MainForm : Form
     }
   }
 
-  private void ImportFromExcel(string filePath)
+
+  public void ImportFromExcel(string filePath)
   {
     var clients = ReadClientsFromExcel(filePath);
     SaveClientsToDatabase(clients, _clientRepository);
@@ -79,7 +81,7 @@ public partial class MainForm : Form
     return clients;
   }
 
-  private bool TryCreateClientFromRow(IXLRow row, out Client client)
+  public bool TryCreateClientFromRow(IXLRow row, out Client client)
   {
     client = null!;
     // Считываем данные из Excel
@@ -95,7 +97,6 @@ public partial class MainForm : Form
     var pincodeString = row.Cell(10).GetFormattedString().Trim();
     var bonusString = row.Cell(11).GetString().Trim();
     var turnoverString = row.Cell(12).GetString().Trim();
-
 
     #region Валидация полей
 
@@ -130,7 +131,7 @@ public partial class MainForm : Form
     return true;
   }
 
-  private void SaveClientsToDatabase(List<Client> clients, ClientRepository clientRepository)
+  public void SaveClientsToDatabase(List<Client> clients, IClientRepository clientRepository)
   {
     using (var context = new AppDbContext())
     {
@@ -171,7 +172,7 @@ public partial class MainForm : Form
   }
 
   // listener method
-  private void dataGridView_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+  public void dataGridView_CellValueChanged(object sender, DataGridViewCellEventArgs e)
   {
     if (e.RowIndex < 0) return; // Игнорируем заголовки
 
@@ -231,7 +232,7 @@ public partial class MainForm : Form
             };
 
             _clientRepository.RemoveClient(context, existingClient); // Удаляем старый объект
-            _clientRepository.AddClient(context, updatedClient); // Добавляем новый объект
+            _clientRepository.AddNewClient(context, updatedClient); // Добавляем новый объект
             _clientRepository.SaveChanges(context); // Сохраняем изменения
 
             // Обновляем объект в BindingList
